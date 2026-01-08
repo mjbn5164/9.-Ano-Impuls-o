@@ -1,0 +1,718 @@
+<!DOCTYPE html>
+<html lang="pt-PT">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Space Invaders: Impulsão & Arquimedes</title>
+    <link href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap" rel="stylesheet">
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #000;
+            color: #0f0; /* Retro terminal green */
+            font-family: 'Press Start 2P', cursive;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            user-select: none;
+        }
+
+        #game-container {
+            position: relative;
+            width: 100%;
+            max-width: 800px;
+            aspect-ratio: 4/3;
+            border: 4px solid #0f0;
+            box-shadow: 0 0 20px rgba(0, 255, 0, 0.4);
+            background: #111;
+        }
+
+        canvas {
+            display: block;
+            width: 100%;
+            height: 100%;
+        }
+
+        /* UI Overlays */
+        .overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.9);
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            text-align: center;
+            z-index: 10;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        h1 {
+            font-size: 24px;
+            color: #fff;
+            margin-bottom: 20px;
+            line-height: 1.5;
+            text-transform: uppercase;
+            text-shadow: 2px 2px #0f0;
+            padding: 0 20px;
+        }
+
+        p {
+            font-size: 14px;
+            color: #ccc;
+            margin-bottom: 30px;
+            line-height: 1.8;
+            padding: 0 40px;
+        }
+
+        button {
+            background: #0f0;
+            color: #000;
+            border: 2px solid #fff;
+            padding: 15px 30px;
+            font-family: 'Press Start 2P', cursive;
+            font-size: 16px;
+            cursor: pointer;
+            text-transform: uppercase;
+            transition: transform 0.1s;
+        }
+
+        button:active {
+            transform: scale(0.95);
+        }
+
+        button:hover {
+            background: #fff;
+            color: #000;
+        }
+
+        /* Mobile Controls */
+        #mobile-controls {
+            display: none;
+            width: 100%;
+            max-width: 800px;
+            justify-content: space-between;
+            padding: 20px;
+            box-sizing: border-box;
+            margin-top: 10px;
+        }
+
+        .control-btn {
+            background: rgba(255, 255, 255, 0.2);
+            border: 2px solid #0f0;
+            color: #0f0;
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+            user-select: none;
+        }
+
+        .control-btn:active {
+            background: rgba(0, 255, 0, 0.5);
+        }
+
+        #fire-btn {
+            border-color: #f00;
+            color: #f00;
+            width: 80px;
+            height: 80px;
+        }
+
+        @media (max-width: 768px) {
+            #mobile-controls {
+                display: flex;
+            }
+            h1 { font-size: 16px; }
+            p { font-size: 10px; padding: 0 10px; }
+            #game-container { border-width: 2px; }
+        }
+
+        /* HUD inside game */
+        #hud {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            padding: 15px;
+            box-sizing: border-box;
+            display: flex;
+            justify-content: space-between;
+            pointer-events: none;
+            color: #fff;
+            font-size: 12px;
+            z-index: 5;
+            background: linear-gradient(to bottom, rgba(0,0,0,0.8), transparent);
+        }
+
+        #question-box {
+            position: absolute;
+            bottom: 60px; /* Above ship */
+            left: 50%;
+            transform: translateX(-50%);
+            width: 90%;
+            text-align: center;
+            background: rgba(0, 20, 0, 0.9);
+            border: 1px solid #0f0;
+            padding: 15px;
+            color: #fff;
+            font-size: 14px;
+            line-height: 1.4;
+            pointer-events: none;
+            z-index: 5;
+        }
+
+        /* Cooldown Bar */
+        #reload-msg {
+            position: absolute;
+            bottom: 120px;
+            left: 50%;
+            transform: translateX(-50%);
+            color: #555;
+            font-size: 10px;
+            display: none;
+        }
+        
+        .reloading {
+            color: #888 !important; 
+            display: block !important;
+        }
+
+        .blink {
+            animation: blinker 1s linear infinite;
+        }
+
+        @keyframes blinker {
+            50% { opacity: 0; }
+        }
+    </style>
+</head>
+<body>
+
+    <div id="game-container">
+        <canvas id="gameCanvas"></canvas>
+        
+        <div id="hud">
+            <div>VIDAS: <span id="lives-display">5</span></div>
+            <div style="color: #ff0;">PONTOS: <span id="score-display">0</span></div>
+            <div>NÍVEL: <span id="level-display">1</span></div>
+        </div>
+
+        <div id="question-box">A preparar sistema de navegação...</div>
+        <div id="reload-msg">...</div>
+
+        <div id="start-screen" class="overlay">
+            <h1>IMPULSÃO & ARQUIMEDES<br>SPACE MISSION</h1>
+            <p>Níveis 1-9: Desvia-te dos detritos (são blindados!)<br>
+            Nível 10: Podes destruir detritos, mas a arma aquece.</p>
+            <p style="color: yellow; font-size: 10px;">TIRO: 2/s (Normal) | 1/s (Nível 10)</p>
+            <button onclick="startGame()">INICIAR MISSÃO</button>
+        </div>
+
+        <div id="game-over-screen" class="overlay hidden">
+            <h1 style="color: red;">GAME OVER</h1>
+            <p>A física venceu desta vez.<br>Ficaste sem vidas.</p>
+            <p>Pontuação Final: <span id="final-score-lose">0</span></p>
+            <button onclick="restartGame()">Tentar Novamente</button>
+        </div>
+
+        <div id="win-screen" class="overlay hidden">
+            <h1 class="blink" style="color: #0ff;">PARABÉNS!</h1>
+            <p>Pontuação Final: <span id="final-score-win">0</span></p>
+            <div style="background: white; color: black; padding: 20px; border: 4px dashed red; margin: 20px;">
+                🎟️ BILHETE<br>PISCINAS DO REDONDO
+            </div>
+            <button onclick="restartGame()">Jogar Outra Vez</button>
+        </div>
+    </div>
+
+    <div id="mobile-controls">
+        <div class="control-btn" id="left-btn">◄</div>
+        <div class="control-btn" id="fire-btn">●</div>
+        <div class="control-btn" id="right-btn">►</div>
+    </div>
+
+    <script>
+        // --- Game Data ---
+        const questions = [
+            {
+                text: "O que é a Impulsão?",
+                options: ["Força vertical", "Peso", "Massa", "Densidade"],
+                correct: 0
+            },
+            {
+                text: "Quem formulou a lei sobre corpos imersos em fluidos?",
+                options: ["Newton", "Einstein", "Arquimedes", "Galileu"],
+                correct: 2
+            },
+            {
+                text: "A impulsão tem sentido de...",
+                options: ["Cima p/ Baixo", "Baixo p/ Cima", "Horizontal", "Nulo"],
+                correct: 1
+            },
+            {
+                text: "A impulsão é igual ao peso do...",
+                options: ["Corpo", "Ar", "Fluido Deslocado", "Recipiente"],
+                correct: 2
+            },
+            {
+                text: "Se Peso > Impulsão, o corpo...",
+                options: ["Flutua", "Vai ao fundo", "Sobe", "Explode"],
+                correct: 1
+            },
+            {
+                text: "Se Peso < Impulsão, o corpo...",
+                options: ["Sobe à superfície", "Vai ao fundo", "Fica no meio", "Derrete"],
+                correct: 0
+            },
+            {
+                text: "A impulsão depende do material do corpo?",
+                options: ["Sim", "Não", "Só se for ferro", "Depende da cor"],
+                correct: 1
+            },
+            {
+                text: "Qual a unidade de Impulsão no SI?",
+                options: ["Kilograma", "Pascal", "Joule", "Newton"],
+                correct: 3
+            },
+            {
+                text: "Fórmula: I = P(real) - ...?",
+                options: ["P(aparente)", "Massa", "Volume", "Gravidade"],
+                correct: 0
+            },
+            {
+                text: "Quanto maior o volume imerso...",
+                options: ["Menor a Impulsão", "Maior a Impulsão", "Igual", "Peso aumenta"],
+                correct: 1
+            }
+        ];
+
+        // --- Game Variables ---
+        const canvas = document.getElementById('gameCanvas');
+        const ctx = canvas.getContext('2d');
+        let gameLoopId;
+        let lastTime = 0;
+        
+        let lastShotTime = 0;
+        let shootCooldown = 0; // ms
+
+        const gameState = {
+            currentQuestionIndex: 0,
+            lives: 5,
+            score: 0,
+            status: 'menu', 
+        };
+
+        const ship = {
+            x: 0,
+            y: 0,
+            width: 40,
+            height: 30,
+            speed: 300,
+            color: '#0f0'
+        };
+
+        let bullets = [];
+        let enemies = []; 
+        let obstacles = []; 
+
+        const keys = {
+            ArrowLeft: false,
+            ArrowRight: false,
+            Space: false
+        };
+
+        // --- Initialization ---
+        function resize() {
+            canvas.width = canvas.offsetWidth;
+            canvas.height = canvas.offsetHeight;
+            ship.y = canvas.height - 70;
+            ship.x = canvas.width / 2 - ship.width / 2;
+        }
+        window.addEventListener('resize', resize);
+        resize();
+
+        // --- Input Handling ---
+        window.addEventListener('keydown', e => {
+            if(e.code === 'ArrowLeft') keys.ArrowLeft = true;
+            if(e.code === 'ArrowRight') keys.ArrowRight = true;
+            if(e.code === 'Space') {
+                if(!keys.Space && gameState.status === 'playing') fireBullet();
+                keys.Space = true;
+            }
+        });
+        window.addEventListener('keyup', e => {
+            if(e.code === 'ArrowLeft') keys.ArrowLeft = false;
+            if(e.code === 'ArrowRight') keys.ArrowRight = false;
+            if(e.code === 'Space') keys.Space = false;
+        });
+
+        const leftBtn = document.getElementById('left-btn');
+        const rightBtn = document.getElementById('right-btn');
+        const fireBtn = document.getElementById('fire-btn');
+
+        leftBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys.ArrowLeft = true; });
+        leftBtn.addEventListener('touchend', (e) => { e.preventDefault(); keys.ArrowLeft = false; });
+        rightBtn.addEventListener('touchstart', (e) => { e.preventDefault(); keys.ArrowRight = true; });
+        rightBtn.addEventListener('touchend', (e) => { e.preventDefault(); keys.ArrowRight = false; });
+        fireBtn.addEventListener('touchstart', (e) => { 
+            e.preventDefault(); 
+            if(gameState.status === 'playing') fireBullet(); 
+        });
+
+        // --- Game Logic ---
+
+        function startGame() {
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('game-over-screen').classList.add('hidden');
+            document.getElementById('win-screen').classList.add('hidden');
+            
+            gameState.currentQuestionIndex = 0;
+            gameState.lives = 5;
+            gameState.score = 0;
+            gameState.status = 'playing';
+            
+            lastShotTime = 0; 
+            
+            updateHUD();
+            loadQuestion();
+            
+            lastTime = performance.now();
+            if(gameLoopId) cancelAnimationFrame(gameLoopId);
+            gameLoopId = requestAnimationFrame(gameLoop);
+        }
+
+        function restartGame() {
+            startGame();
+        }
+
+        function loadQuestion() {
+            if (gameState.currentQuestionIndex >= questions.length) {
+                winGame();
+                return;
+            }
+
+            const q = questions[gameState.currentQuestionIndex];
+            document.getElementById('question-box').innerText = q.text;
+            
+            // --- DIFFICULTY SETTINGS ---
+            
+            const baseObstacles = 5;
+            const numObstacles = baseObstacles + (gameState.currentQuestionIndex * 10);
+            
+            // COOLDOWN LOGIC:
+            // Level 10 (Index 9) = 1000ms (1 shot/sec)
+            // Others = 500ms (2 shots/sec)
+            if (gameState.currentQuestionIndex === 9) {
+                shootCooldown = 1000;
+            } else {
+                shootCooldown = 500;
+            }
+            
+            // --- Setup Obstacles ---
+            obstacles = [];
+            const speedMultiplier = 1 + (gameState.currentQuestionIndex * 0.2); 
+
+            for(let i=0; i < numObstacles; i++) {
+                obstacles.push({
+                    x: Math.random() * canvas.width,
+                    y: 120 + Math.random() * (canvas.height - 250),
+                    radius: 10 + Math.random() * 5, 
+                    vx: (Math.random() < 0.5 ? -1 : 1) * (50 + Math.random() * 80) * speedMultiplier,
+                    vy: (Math.random() - 0.5) * 30,
+                    symbol: Math.random() > 0.5 ? "⚓" : "🪨"
+                });
+            }
+            
+            // --- Setup Answers ---
+            enemies = [];
+            const padding = 10;
+            const availableWidth = canvas.width - (padding * 2);
+            const enemyWidth = availableWidth / 4 - 10;
+            
+            let indices = [0, 1, 2, 3];
+            for (let i = indices.length - 1; i > 0; i--) {
+                const j = Math.floor(Math.random() * (i + 1));
+                [indices[i], indices[j]] = [indices[j], indices[i]];
+            }
+
+            indices.forEach((originalIndex, posIndex) => {
+                enemies.push({
+                    x: padding + posIndex * (enemyWidth + 10),
+                    y: 50,
+                    width: enemyWidth,
+                    height: 60,
+                    text: q.options[originalIndex],
+                    originalIndex: originalIndex,
+                    vx: 30 + (gameState.currentQuestionIndex * 8),
+                    color: '#fff'
+                });
+            });
+
+            bullets = [];
+        }
+
+        function fireBullet() {
+            const now = performance.now();
+            if (now - lastShotTime < shootCooldown) {
+                return; 
+            }
+
+            lastShotTime = now;
+
+            bullets.push({
+                x: ship.x + ship.width / 2,
+                y: ship.y,
+                width: 4,
+                height: 10,
+                speed: 500,
+                active: true
+            });
+        }
+
+        function update(dt) {
+            if (gameState.status !== 'playing') return;
+
+            // Move Ship
+            if (keys.ArrowLeft && ship.x > 0) ship.x -= ship.speed * dt;
+            if (keys.ArrowRight && ship.x + ship.width < canvas.width) ship.x += ship.speed * dt;
+
+            // Move Obstacles
+            obstacles.forEach(obs => {
+                obs.x += obs.vx * dt;
+                obs.y += obs.vy * dt;
+                if (obs.x < 0 || obs.x > canvas.width) obs.vx *= -1;
+                if (obs.y < 100 || obs.y > canvas.height - 100) obs.vy *= -1;
+            });
+
+            // Move Enemies
+            let hitWall = false;
+            enemies.forEach(enemy => {
+                enemy.x += enemy.vx * dt;
+                if (enemy.x <= 0 || enemy.x + enemy.width >= canvas.width) {
+                    hitWall = true;
+                }
+            });
+
+            if (hitWall) {
+                enemies.forEach(enemy => {
+                    enemy.vx *= -1;
+                    if(enemy.x < 0) enemy.x = 0;
+                    if(enemy.x + enemy.width > canvas.width) enemy.x = canvas.width - enemy.width;
+                });
+            }
+
+            // Move Bullets
+            bullets.forEach(b => {
+                b.y -= b.speed * dt;
+                if (b.y < 0) b.active = false;
+            });
+            bullets = bullets.filter(b => b.active);
+
+            checkCollisions();
+        }
+
+        function checkCollisions() {
+            bullets.forEach(bullet => {
+                if (!bullet.active) return;
+
+                // 1. Obstacles Collision
+                // Iterate backwards to allow splicing
+                for (let i = obstacles.length - 1; i >= 0; i--) {
+                    let obs = obstacles[i];
+                    const dx = bullet.x - obs.x;
+                    const dy = bullet.y - obs.y;
+                    const distance = Math.sqrt(dx*dx + dy*dy);
+                    
+                    if (distance < obs.radius + 5) {
+                        // Bullet always destroyed
+                        bullet.active = false; 
+
+                        // Obstacle destroyed ONLY at Level 10 (Index 9)
+                        if (gameState.currentQuestionIndex === 9) {
+                            obstacles.splice(i, 1); 
+                        }
+                        
+                        return; // Bullet hit something, stop checking this bullet
+                    }
+                }
+
+                // 2. Enemies Collision
+                enemies.forEach(enemy => {
+                    if (
+                        bullet.active &&
+                        bullet.x < enemy.x + enemy.width &&
+                        bullet.x + bullet.width > enemy.x &&
+                        bullet.y < enemy.y + enemy.height &&
+                        bullet.y + bullet.height > enemy.y
+                    ) {
+                        bullet.active = false;
+                        handleAnswer(enemy);
+                    }
+                });
+            });
+        }
+
+        function handleAnswer(enemy) {
+            const currentQ = questions[gameState.currentQuestionIndex];
+            
+            if (enemy.originalIndex === currentQ.correct) {
+                gameState.score += 50;
+                showFeedback("CORRETO! +50 Pts", "#0f0");
+                setTimeout(() => {
+                    gameState.currentQuestionIndex++;
+                    gameState.status = 'playing';
+                    updateHUD();
+                    loadQuestion();
+                }, 1500);
+            } else {
+                gameState.lives--;
+                updateHUD();
+                if (gameState.lives <= 0) {
+                    gameOver();
+                } else {
+                    showFeedback("ERRADO! -1 Vida", "#f00");
+                    setTimeout(() => {
+                        gameState.status = 'playing';
+                        loadQuestion();
+                    }, 1500);
+                }
+            }
+        }
+
+        function showFeedback(text, color) {
+            gameState.status = 'feedback';
+            ctx.fillStyle = 'rgba(0,0,0,0.8)';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+            ctx.fillStyle = color;
+            ctx.font = '30px "Press Start 2P"';
+            ctx.textAlign = 'center';
+            ctx.fillText(text, canvas.width/2, canvas.height/2);
+        }
+
+        function updateHUD() {
+            document.getElementById('lives-display').innerText = gameState.lives;
+            document.getElementById('score-display').innerText = gameState.score;
+            document.getElementById('level-display').innerText = (gameState.currentQuestionIndex + 1) + "/" + questions.length;
+        }
+
+        function gameOver() {
+            gameState.status = 'gameover';
+            document.getElementById('final-score-lose').innerText = gameState.score;
+            document.getElementById('game-over-screen').classList.remove('hidden');
+        }
+
+        function winGame() {
+            gameState.status = 'win';
+            document.getElementById('final-score-win').innerText = gameState.score;
+            document.getElementById('win-screen').classList.remove('hidden');
+        }
+
+        function draw() {
+            // Clear
+            ctx.fillStyle = '#111';
+            ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+            // Background Stars
+            ctx.fillStyle = '#fff';
+            for(let i=0; i<30; i++) {
+                ctx.fillRect(
+                    (Math.sin(lastTime/2000 + i*10) * canvas.width), 
+                    (Math.cos(lastTime/2000 * i) * canvas.height), 
+                    2, 2
+                );
+            }
+
+            if (gameState.status === 'playing' || gameState.status === 'feedback') {
+                
+                // Draw Obstacles
+                ctx.font = "20px Arial";
+                ctx.textAlign = 'center';
+                ctx.textBaseline = 'middle';
+                
+                // Color change to indicate destructive power
+                if(gameState.currentQuestionIndex === 9) {
+                    ctx.fillStyle = "#ff6666"; // Reddish if destroyable
+                } else {
+                    ctx.fillStyle = "#aaa"; // Grey if invincible
+                }
+                
+                obstacles.forEach(obs => {
+                    ctx.fillText(obs.symbol, obs.x, obs.y);
+                });
+
+                // Check Cooldown Status for Ship Color
+                const now = performance.now();
+                const isReloading = (now - lastShotTime < shootCooldown);
+                
+                // Toggle UI Message
+                const reloadMsg = document.getElementById('reload-msg');
+                if (isReloading && gameState.status === 'playing') {
+                    reloadMsg.classList.add('reloading');
+                } else {
+                    reloadMsg.classList.remove('reloading');
+                }
+
+                // Draw Ship
+                ctx.fillStyle = isReloading ? '#555' : ship.color; // Grey if reloading
+                ctx.beginPath();
+                ctx.moveTo(ship.x + ship.width/2, ship.y);
+                ctx.lineTo(ship.x + ship.width, ship.y + ship.height);
+                ctx.lineTo(ship.x, ship.y + ship.height);
+                ctx.fill();
+
+                // Draw Bullets
+                ctx.fillStyle = '#ff0';
+                bullets.forEach(b => {
+                    ctx.fillRect(b.x, b.y, b.width, b.height);
+                });
+
+                // Draw Enemies
+                enemies.forEach(e => {
+                    ctx.strokeStyle = '#0f0';
+                    ctx.lineWidth = 2;
+                    ctx.strokeRect(e.x, e.y, e.width, e.height);
+                    
+                    ctx.fillStyle = 'rgba(0, 50, 0, 0.5)';
+                    ctx.fillRect(e.x, e.y, e.width, e.height);
+
+                    ctx.fillStyle = '#fff';
+                    let fontSize = 10;
+                    if(e.text.length > 15) fontSize = 8;
+                    ctx.font = fontSize + 'px "Press Start 2P"';
+                    ctx.textAlign = 'center';
+                    
+                    ctx.fillText(e.text, e.x + e.width/2, e.y + 35);
+                });
+            }
+        }
+
+        function gameLoop(timestamp) {
+            let dt = (timestamp - lastTime) / 1000;
+            lastTime = timestamp;
+
+            update(dt);
+            if (gameState.status !== 'feedback') {
+                draw();
+            }
+            
+            if(gameState.status === 'playing' || gameState.status === 'feedback') {
+                gameLoopId = requestAnimationFrame(gameLoop);
+            }
+        }
+    </script>
+</body>
+</html>
